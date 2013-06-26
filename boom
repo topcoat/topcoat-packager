@@ -1,0 +1,99 @@
+#!/bin/sh
+
+
+# build up a working tmp directories to futz around in
+create_working_directories() {
+    # create a tmp dir
+    mkdir -p topcoat-release-tmp 
+    # work from tmp dir
+    cd topcoat-release-tmp
+    # clone topcoat if it hasn't been already
+    if [ ! -e ./topcoat ] 
+    then
+        git clone https://github.com/topcoat/topcoat.git
+    fi
+    # gtfo so we're always working from the ./
+    cd ..
+}
+
+# bumps given repo up one MINOR
+bump() {
+    cd $1
+    local path_to_repo=$1
+    local current_version=`node -e 'console.log(require("./package.json").version)'`
+    local next_version=`node -e "require('./../../lib/bump-minor-version')('$current_version')"`
+    # TODO update with better logging
+    echo "Bumping $path_to_repo from $current_version to $next_version"
+    # lets stay local while we work and then back out
+    npm version $next_version
+    git tag -d "v$next_version" # yes this stinks...
+    git tag $next_version
+    cd ..
+}
+
+# updates all the repos in ./topcoat/topcoat/package.json (and main repo itself)
+stage_changes_locally() {
+    # read package.json to get a list of all the topcoat repos listed in package.json
+    repos=`node lib/output-controls-from-package-json.js ./../topcoat-release-tmp/topcoat/package.json`
+    # step into working directory
+    cd topcoat-release-tmp
+    # bump the minor on each control (tag each repo, and update each package.json)
+    for i in $repos; 
+    do
+        current_remote_repo="http://github.com/$i.git"
+        current_local_repo=`basename $i`
+        
+        # clone if we haven't already
+        if [ ! -e $current_local_repo ]
+        then
+            git clone $current_remote_repo
+        else
+            # update to the latest HEAD
+            cd $current_local_repo && git pull && cd ..
+        fi
+        bump $current_local_repo
+    done
+    # update the main repo package.json
+    bump ./topcoat
+    # step out
+    cd ..
+}
+
+push_tags_prompt() {
+    while true; do
+        read -p "Push all the tags? [Yy|Nn] " yn
+        case $yn in
+        [Yy]* ) push_all_the_tags; break;;
+        [Nn]* ) echo 'Cool story bro. The changes are staged locally.'; exit;;
+        * ) echo "Please answer yes or no.";;
+        esac
+    done
+}
+
+push_all_the_tags() {
+    # read package.json to get a list of all the topcoat repos listed in package.json
+    repos=`node lib/output-controls-from-package-json.js ./../topcoat-release-tmp/topcoat/package.json`
+    # step into working directory
+    cd topcoat-release-tmp
+    # push the tags for each repo
+    for i in $repos; 
+    do
+        current_local_repo=`basename $i`
+        cd $current_local_repo 
+        git push --tags
+        cd ..
+    done
+    # finally push the tags for the main repo
+    cd topcoat
+    git push --tags
+    # step out
+    cd ..
+    # cleanup working junk
+    rm -rf topcoat-release-tmp
+}
+
+# ...here we gooooooo
+create_working_directories
+stage_changes_locally
+push_tags_prompt
+# TODO update the website download url and link??
