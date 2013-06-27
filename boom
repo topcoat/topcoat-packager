@@ -1,8 +1,9 @@
 #!/bin/sh
-
+. lib/loggers.sh
 
 # build up a working tmp directories to futz around in
 create_working_directories() {
+    info 'Topcoat Packager' 'working directory: ./topcoat-release-tmp'
     # create a tmp dir
     mkdir -p topcoat-release-tmp 
     # work from tmp dir
@@ -23,7 +24,7 @@ bump() {
     local current_version=`node -e 'console.log(require("./package.json").version)'`
     local next_version=`node -e "require('./../../lib/bump-minor-version')('$current_version')"`
     # TODO update with better logging
-    echo "Bumping $path_to_repo from $current_version to $next_version"
+    warn "Bumping $path_to_repo from $current_version to $next_version"
     # lets stay local while we work and then back out
     npm version $next_version
     git tag -d "v$next_version" # yes this stinks...
@@ -60,11 +61,14 @@ stage_changes_locally() {
 }
 
 push_tags_prompt() {
+    local red=${txtbld}$(tput setaf 1)
+    local reset=$(tput sgr0) 
+    
     while true; do
-        read -p "Push all the tags? [Yy|Nn] " yn
+        read -p "${red}Push all the tags? [Yy|Nn] ${reset}" yn
         case $yn in
         [Yy]* ) push_all_the_tags; break;;
-        [Nn]* ) echo 'Cool story bro. The changes are staged locally.'; exit;;
+        [Nn]* ) info 'Cool story bro.' 'The changes are staged locally.'; exit;;
         * ) echo "Please answer yes or no.";;
         esac
     done
