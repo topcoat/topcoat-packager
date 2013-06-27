@@ -32,12 +32,25 @@ bump() {
     cd ..
 }
 
+# DANGER: this assumes `bump` has been called first so that the version is actual version
+function update_canonical_package_json() {
+    cd $1
+    local path_to_repo=$1
+    local org_slash_repo_key=$2
+    local path_to_canonical_repo="$(pwd)/../topcoat"
+    local new_version_value=`node -e 'console.log(require("./package.json").version)'`
+    node -e "require('./../../lib/update-canonical-package-json')('$path_to_canonical_repo', '$org_slash_repo_key', '$new_version_value')"
+    cd ..
+}
+
 # updates all the repos in ./topcoat/topcoat/package.json (and main repo itself)
 stage_changes_locally() {
     # read package.json to get a list of all the topcoat repos listed in package.json
     repos=`node lib/output-controls-from-package-json.js ./../topcoat-release-tmp/topcoat/package.json`
     # step into working directory
     cd topcoat-release-tmp
+    # update the main repo package.json
+    bump ./topcoat
     # bump the minor on each control (tag each repo, and update each package.json)
     for i in $repos; 
     do
@@ -53,9 +66,8 @@ stage_changes_locally() {
             cd $current_local_repo && git pull && cd ..
         fi
         bump $current_local_repo
+        update_canonical_package_json $current_local_repo $i
     done
-    # update the main repo package.json
-    bump ./topcoat
     # step out
     cd ..
 }
